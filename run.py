@@ -37,13 +37,13 @@ def get_rays_np(H, W, K, c2w):
     """
     Generate rays of each pixel given camera pose c2w and camera intrinsics K.
     Rays originate at the camera end at a pixel in the HxW image.
-
+​
     Parameters:
         H (int): The height of the image.
         W (int): The width of the image.
         K (ndarray): A 3x3 matrix that stores the intrinsics.
         c2w (ndarray): A 4x4 matrix that stores the camera pose.
-
+​
     Returns:
       (ndarray) Rays' origins in canonical coordinate frame.
       (ndarray) Rays' directions in canonical coordinate frame.
@@ -61,7 +61,7 @@ def line_sphere_intersection_numpy(totem_pos, totem_radius, rays_d, rays_o, use_
         Calculate the camera ray intersection with a totem.
             Equation from here
             https://stackoverflow.com/questions/32571063/specific-location-of-intersection-between-sphere-and-3d-line-segment
-
+​
         Args:
             totem_pos: 3D position of the spherical totem's center
             totem_radius: totem radius in centimeters
@@ -87,9 +87,6 @@ def line_sphere_intersection_numpy(totem_pos, totem_radius, rays_d, rays_o, use_
 
     # Filter invalid rays (not intersecting or one intersection)
     valid_idx = np.where(sqrt_inner > 0)[0]
-    sqrt_inner = sqrt_inner[valid_idx]
-    a = a[valid_idx]
-    b = b[valid_idx]
 
     # Select one of the intersections (ts, distance along rays_d)
     t1 = (-b+np.sqrt(sqrt_inner))/(2*a)
@@ -101,7 +98,7 @@ def line_sphere_intersection_numpy(totem_pos, totem_radius, rays_d, rays_o, use_
         t = np.max(ts, axis=0)
 
     # Compute the 3D position of intersections
-    pts = rays_o[valid_idx] + t[:, None] * rays_d[valid_idx]
+    pts = rays_o + t[:, None] * rays_d
 
     # return_pts = np.zeros((rays_o.shape[0], 3), dtype=object)
     # indices_labeled = np.isin(np.arange(totem_rays_o.shape[0], valid_idx_2))
@@ -126,7 +123,6 @@ def line_plane_intersection_numpy(H, W, K, c2w, rays_d, rays_o, use_min=True):
         H, W, _ = rays_o.shape
         rays_o = rays_o.reshape(H*W, 3)
         rays_d = rays_d.reshape(H*W, 3)
-
     #TODO: valid_idx =
     t = ((np.matmul(-planevec,rays_o.T)-D)/(np.matmul(planevec,rays_d.T))).reshape(H*W,1).flatten() # (N,)
     pts = rays_o + t[:,None] * rays_d
@@ -176,7 +172,6 @@ def cam_rays_to_totem_rays_numpy(cam_rays_o, cam_rays_d, totem_pos, totem_radius
     OD = (D-cam_ray_o)/LA.norm(D-cam_ray_o, axis=1)[:, None]
     AD = (D-totem_pos)/LA.norm(D-totem_pos, axis=1)[:, None]
     DE= get_refracted_ray_numpy(OD, AD, ior_air, ior_totem)
-
     # The second refraction
     E, valid_idx_2 = line_sphere_intersection_numpy(totem_pos, totem_radius, DE, D, use_min=False)
     EA = (totem_pos-E)/LA.norm(totem_pos-E, axis=1)[:, None]
@@ -200,8 +195,6 @@ def cam_rays_to_totem_rays_numpy(cam_rays_o, cam_rays_d, totem_pos, totem_radius
     #     else:
     #         return_totem_rays_o[i] = totem_rays_o[i]
     #         return_totem_rays_d[i] = totem_rays_d[i]
-    totem_rays_o = totem_rays_o[valid_idx_2] # np.where(valid_idx_2)#
-    totem_rays_d = totem_rays_d[valid_idx_2]
 
     return totem_rays_o, totem_rays_d, valid_idx_1, valid_idx_2#, valid_idx_3
 
@@ -213,6 +206,7 @@ def unravel(pts, H, W):
                pts: (ndarray) of points, size H,W,3
     '''
     return pts.reshape(H,W,3)
+
 
 if __name__ == "__main__":
     H = 10
@@ -240,8 +234,10 @@ if __name__ == "__main__":
     rays_o, rays_d = get_rays_np(H, W, K, c2w) # in canonical frame
     # pts, valid_idx = line_sphere_intersection_numpy(totem_center, totem_r, rays_d, rays_o) # in canonical frame
     totem_rays_o, totem_rays_d, valid_idx_1, valid_idx_2 = cam_rays_to_totem_rays_numpy(rays_o, rays_d, totem_center, totem_r, ior_totem=1.504) # in canonical frame
-    print(valid_idx_2.shape)
     pts = line_plane_intersection_numpy(H, W, K2, c2w_front, totem_rays_d, totem_rays_o)
-    # print(pts.shape)
     pts = unravel(pts, H, W)
     print(pts.shape)
+
+    # Merge valid idx
+    valid_idx = [idx for idx in valid_idx_1 if idx in valid_idx_2]
+    # TODO: use the valid idx to find invalid idx, use the invalid idx to identify bad pts and set them to zero.  
